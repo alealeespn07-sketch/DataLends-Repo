@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+<title>DataLends</title>
+
+<link rel="stylesheet" href="{{ url_for('static',filename='css/styles.css') }}">
+
+</head>
+
+<body>
+
+<div class="app-shell">
+
+<aside id="sidebar" class="sidebar">
+
+    <div class="brand">
+
+        <div class="brand-mark">
+            DL
+        </div>
+
+        <div>
+            <div class="brand-name">
+                DataLends
+            </div>
+
+            <div class="brand-subtitle">
+                Análisis simple
+            </div>
+        </div>
+
+    </div>
+
+    <nav class="menu">
+
+        <button class="menu-item active">
+            Inicio
+        </button>
+
+        <button class="menu-item">
+            Proyecto
+        </button>
+
+    </nav>
+
+    <div class="sidebar-footer">
+       DataLends
+    </div>
+
+</aside>
+
+<main class="main-content">
+
+<header class="topbar">
+
+    <button id="menu-toggle" class="mobile-menu">
+        ☰
+    </button>
+
+    <div>
+        <div class="eyebrow">
+            Espacio de trabajo
+        </div>
+
+        <h1>
+            DataLends
+        </h1>
+    </div>
+
+    <span id="status" class="status">
+        Iniciando...
+    </span>
+
+</header>
+
+<section class="workspace">
+
+    <div class="welcome-card">
+
+        <div class="eyebrow">
+            Primer módulo funcional
+        </div>
+
+        <h2>
+            Bienvenido a DataLends
+        </h2>
+
+        <p>
+            Primera versión funcional de la aplicación.
+        </p>
+
+        <button id="test-button" class="button">
+            Comprobar backend
+        </button>
+
+        <div id="result" class="result">
+            Esperando prueba...
+        </div>
+
+    </div>
+
+    <div class="info-grid">
+
+        <div class="info-card">
+            <span>Backend</span>
+            <strong>Flask</strong>
+        </div>
+
+        <div class="info-card">
+            <span>Base de datos</span>
+            <strong>SQLite</strong>
+        </div>
+
+        <div class="info-card">
+            <span>Frontend</span>
+            <strong>HTML / CSS / JS</strong>
+        </div>
+
+    </div>
+
+</section>
+
+</main>
+
+</div>
+
+<script src="{{ url_for('static',filename='js/app.js') }}"></script>
+
+</body>
+</html>
