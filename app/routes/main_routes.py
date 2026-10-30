@@ -1,37 +1,27 @@
-from flask import Flask,render_template,jsonify
-from database import init_db,database_status
+from flask import Blueprint,render_template,jsonify
+from app.db import database_status
 
-app=Flask(__name__)
+main_bp=Blueprint("main",__name__)
 
-@app.route("/")
+@main_bp.get("/")
 def index():
     return render_template("index.html")
 
-@app.get("/api/health")
+@main_bp.get("/api/health")
 def health():
     return jsonify({
         "status":"ok",
         "message":"Backend funcionando correctamente"
     })
 
-@app.get("/api/info")
+@main_bp.get("/api/info")
 def info():
     db=database_status()
-
     return jsonify({
-        "application":"DataLends",
+        "application":db["app_name"],
         "version":db["version"],
         "backend":"Flask",
         "database":"SQLite",
         "database_connected":db["connected"],
         "status":"running"
     })
-
-if __name__=="__main__":
-    init_db()
-
-    app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug=True
-    )

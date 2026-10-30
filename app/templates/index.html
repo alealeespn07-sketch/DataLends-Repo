@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DataLends</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static',filename='css/styles.css') }}">
+</head>
+<body>
+<div class="app-shell">
+    <aside id="sidebar" class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">DL</div>
+            <div>
+                <div class="brand-name">DataLends</div>
+                <div class="brand-subtitle">Análisis simple</div>
+            </div>
+        </div>
+
+        <div class="sidebar-block">
+            <div class="sidebar-label">Fuentes de datos</div>
+            <label class="upload-box" for="file-input">
+                <span class="upload-icon">↑</span>
+                <span><strong>Cargar datos</strong><small>CSV o Excel</small></span>
+            </label>
+            <input id="file-input" type="file" accept=".csv,.xlsx" hidden>
+        </div>
+
+        <div class="sidebar-block grow">
+            <div class="sidebar-label">Datasets cargados</div>
+            <div id="dataset-list" class="dataset-list"></div>
+        </div>
+
+        <div class="sidebar-footer">DataLends</div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <button id="menu-toggle" class="mobile-menu" aria-label="Abrir menú">☰</button>
+            <div>
+                <div class="eyebrow">Espacio de trabajo</div>
+                <h1 id="page-title">Gestión de datos</h1>
+            </div>
+            <span id="status" class="status">Iniciando...</span>
+        </header>
+
+        <section class="workspace">
+            <div id="toast" class="toast hidden"></div>
+
+            <div id="empty-state" class="empty-state">
+                <div class="empty-icon">DL</div>
+                <h2>No hay datasets cargados</h2>
+                <p>Sube un archivo CSV o Excel para consultar su estructura y sus registros.</p>
+            </div>
+
+            <div id="workspace-content" class="hidden">
+                <div class="dataset-header">
+                    <div class="dataset-title">
+                        <div class="eyebrow">Dataset seleccionado</div>
+                        <h2 id="dataset-name">Dataset</h2>
+                        <p id="dataset-file"></p>
+                    </div>
+                    <div class="dataset-actions">
+                        <button id="rename-button" class="button secondary">Renombrar</button>
+                        <button id="delete-button" class="button danger">Eliminar</button>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="info-card"><span>Registros</span><strong id="stat-rows">0</strong></div>
+                    <div class="info-card"><span>Columnas</span><strong id="stat-columns">0</strong></div>
+                    <div class="info-card"><span>Numéricas</span><strong id="stat-numeric">0</strong></div>
+                </div>
+
+                <div class="content-grid">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <div><h3>Columnas detectadas</h3><span>Tipos identificados</span></div>
+                        </div>
+                        <div id="column-list" class="column-list"></div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-head">
+                            <div><h3>Estado del sistema</h3><span>Configuración actual</span></div>
+                        </div>
+                        <div id="system-info" class="system-info">Consultando...</div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-head">
+                        <div><h3>Vista previa</h3><span>Primeros 15 registros</span></div>
+                    </div>
+                    <div id="preview-container" class="table-scroll"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+<script src="{{ url_for('static',filename='js/app.js') }}"></script>
+</body>
+</html>
