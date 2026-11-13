@@ -36,6 +36,20 @@ def init_db(database_path):
         )
     """)
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dashboards(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            dataset_id INTEGER NOT NULL,
+            config_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(dataset_id)
+                REFERENCES datasets(id)
+                ON DELETE CASCADE
+        )
+    """)
+
     row=conn.execute(
         "SELECT id FROM app_config LIMIT 1"
     ).fetchone()
@@ -44,11 +58,11 @@ def init_db(database_path):
         conn.execute("""
             INSERT INTO app_config(app_name,version,created_at)
             VALUES(?,?,?)
-        """,("DataLends","0.3",datetime.now().isoformat()))
+        """,("DataLends","0.4",datetime.now().isoformat()))
     else:
         conn.execute(
             "UPDATE app_config SET version=?",
-            ("0.3",)
+            ("0.4",)
         )
 
     conn.commit()
@@ -64,5 +78,5 @@ def database_status():
     return {
         "connected":True,
         "app_name":row["app_name"] if row else "DataLends",
-        "version":row["version"] if row else "0.3"
+        "version":row["version"] if row else "0.4"
     }
