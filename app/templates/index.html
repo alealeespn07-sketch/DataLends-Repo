@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link rel="icon" type="image/x-icon" href="/app/static/images/DatalendsIco.ico">
 <title>DataLends</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +15,7 @@
 <div class="app-shell">
 <aside id="sidebar" class="sidebar">
     <div class="brand">
-        <div class="brand-mark">DL</div>
+        <div class="brand-mark"><img src="/static/images/DatalendsIco.png" alt="Logo-img" width="100%"></div>
         <div><div class="brand-name">DataLends</div><div class="brand-subtitle">Análisis simple</div></div>
     </div>
     <div class="sidebar-block">
@@ -36,8 +37,7 @@
         </div>
         <div id="dashboard-list" class="dataset-list"></div>
     </div>
-    <div class="sidebar-footer">DataLends</div>
-
+    <div class="sidebar-footer"><b>DataLends</b></div>
 </aside>
 
 <main class="main-content">
@@ -100,20 +100,26 @@
             <div class="section-head">
                 <div class="eyebrow">Dashboard guardado</div>
                 <h2 id="dashboard-name">Mi dashboard</h2>
-                <p class="muted">Configura un gráfico y guarda sus cambios.</p>
+                <p class="muted">Agrega varias visualizaciones y configura cada una por separado.</p>
             </div>
+
             <div class="panel">
+                <div class="panel-head">
+                    <div><h3 id="editor-heading">Nueva visualización</h3><span id="editor-help">Configura un gráfico o una tabla dinámica.</span></div>
+                </div>
                 <div class="form-grid">
-                    <label><span>Tipo de gráfico</span>
+                    <label><span>Nombre</span><input id="visual-title" type="text" maxlength="100" placeholder="Ej. Ventas por modelo"></label>
+                    <label><span>Tipo de visualización</span>
                         <select id="chart-type">
                             <option value="bar">Barras</option>
                             <option value="line">Líneas</option>
                             <option value="pie">Pastel</option>
+                            <option value="pivot">Tabla dinámica</option>
                         </select>
                     </label>
-                    <label><span>Agrupar por</span><select id="x-field"></select></label>
-                    <label><span>Columna numérica</span><select id="y-field"></select></label>
-                    <label><span>Operación</span>
+                    <label class="chart-field"><span>Agrupar por</span><select id="x-field"></select></label>
+                    <label class="chart-field"><span>Columna numérica</span><select id="y-field"></select></label>
+                    <label class="chart-field"><span>Operación</span>
                         <select id="aggregation">
                             <option value="sum">Suma</option>
                             <option value="average">Promedio</option>
@@ -121,17 +127,28 @@
                         </select>
                     </label>
                 </div>
-                <div class="panel-footer">
-                    <span class="hint">La configuración se almacena en SQLite.</span>
-                    <button id="save-generate" class="button primary">Guardar y generar</button>
+
+                <div id="pivot-fields" class="form-grid hidden">
+                    <label><span>Filas</span><select id="pivot-rows" multiple size="5"></select></label>
+                    <label><span>Columnas (opcional)</span><select id="pivot-columns" multiple size="5"></select><small>Déjalo vacío para crear la tabla sin columnas.</small></label>
+                    <label><span>Valores</span><select id="pivot-values" multiple size="5"></select></label>
                 </div>
+                <div id="pivot-operations" class="pivot-operations hidden"></div>
+
+                <div class="panel-footer">
+                    <span id="editor-message" class="hint">Cada visualización se guarda por separado.</span>
+                    <div class="editor-buttons">
+                        <button id="cancel-edit" class="button secondary hidden" type="button">Cancelar edición</button>
+                        <button id="save-generate" class="button primary">Agregar visualización</button>
+                    </div>
+                </div>
+                <div id="editor-error" class="editor-error hidden"></div>
             </div>
 
             <div class="panel">
-                <div class="panel-head"><div><h3 id="chart-title">Visualización</h3><span id="chart-meta">Sin análisis</span></div></div>
-                <div class="chart-area">
-                    <canvas id="main-chart"></canvas>
-                    <div id="chart-empty" class="chart-empty">Configura el gráfico para mostrar resultados.</div>
+                <div class="panel-head"><div><h3>Visualizaciones del dashboard</h3><span>Gráficos y tablas guardados</span></div></div>
+                <div id="chart-grid" class="visualization-grid">
+                    <div id="chart-empty" class="chart-empty">Agrega una visualización para comenzar.</div>
                 </div>
             </div>
         </div>

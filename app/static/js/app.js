@@ -3,7 +3,8 @@ const state={
     dashboards:[],
     activeDataset:null,
     activeDashboard:null,
-    chart:null
+    chartInstances:new Map(),
+    editingChartId:null
 };
 const $=s=>document.querySelector(s);
 
@@ -59,7 +60,7 @@ async function boot(){
 }
 async function refreshLists(){
     state.datasets=await api("/api/datasets");
-    state.dashboards=await api("/api/dashboards");
+    state.dashboards=(await api("/api/dashboards")).map(d=>({...d,config:normalizeDashboardConfig(d.config||{})}));
     renderDatasetList();
     renderDashboardList();
 }
@@ -136,34 +137,94 @@ function renderSelectors(columns,config={}){
     const x=$("#x-field"),y=$("#y-field");
     x.innerHTML=columns.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
     const numeric=columns.filter(c=>c.type==="number");
-    y.innerHTML='<option value="">— Contar registros —</option>'+
-        numeric.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+    y.innerHTML='<option value="">— Contar registros —</option>'+numeric.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
     x.value=columns.some(c=>c.name===config.x)?config.x:(defaultX(columns)?.name||"");
     y.value=numeric.some(c=>c.name===config.y)?config.y:(defaultY(columns)?.name||"");
     $("#aggregation").value=config.aggregation||(y.value?"sum":"count");
-    $("#chart-type").value=config.chart_type||"bar";
+    $("#chart-type").value=config.chart_type&&config.chart_type!=="pivot"?config.chart_type:"bar";
+    fillMultiSelect("#pivot-rows",columns,config.rows||[]);
+    fillMultiSelect("#pivot-columns",columns,config.columns||[]);
+    fillMultiSelect("#pivot-values",columns,(config.values||[]).map(v=>typeof v==="string"?v:v.field));
+    renderPivotOperations(config.values||[]);
     updateAggregationUI();
+    updateVisualTypeUI();
+}
+function fillMultiSelect(selector,columns,selected=[]){
+    const select=$(selector);
+    select.innerHTML=columns.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
+    [...select.options].forEach(option=>option.selected=selected.includes(option.value));
+}
+function selectedOptions(selector){return [...$(selector).selectedOptions].map(option=>option.value)}
+function renderPivotOperations(values=null){
+    const container=$("#pivot-operations");
+    const selected=selectedOptions("#pivot-values");
+    const current=new Map();
+    (values||[]).forEach(v=>current.set(typeof v==="string"?v:v.field,typeof v==="string"?"sum":(v.aggregation||"sum")));
+    document.querySelectorAll("[data-pivot-aggregation]").forEach(select=>{
+        if(!current.has(select.dataset.pivotAggregation))current.set(select.dataset.pivotAggregation,select.value);
+    });
+    container.innerHTML=selected.map(field=>{
+        const column=state.activeDataset?.columns?.find(item=>item.name===field);
+        const defaultAggregation=column?.type==="number"?"sum":"count";
+        const aggregation=current.get(field)||defaultAggregation;
+        return `<label class="pivot-operation"><span>${esc(field)}</span>
+            <select data-pivot-aggregation="${esc(field)}">
+                <option value="sum" ${aggregation==="sum"?"selected":""}>Suma</option>
+                <option value="average" ${aggregation==="average"?"selected":""}>Promedio</option>
+                <option value="count" ${aggregation==="count"?"selected":""}>Conteo</option>
+            </select>
+        </label>`;
+    }).join("");
+    container.classList.toggle("hidden",!selected.length||$("#chart-type").value!=="pivot");
+}
+function pivotValues(){
+    return [...document.querySelectorAll("[data-pivot-aggregation]")].map(select=>({
+        field:select.dataset.pivotAggregation,
+        aggregation:select.value
+    }));
 }
 function currentConfig(){
+    const chart_type=$("#chart-type").value;
+    const title=$("#visual-title").value.trim();
+    if(chart_type==="pivot"){
+        return {title,chart_type,rows:selectedOptions("#pivot-rows"),columns:selectedOptions("#pivot-columns"),values:pivotValues()};
+    }
     const aggregation=$("#aggregation").value;
     return {
+        title,
+        chart_type,
         x:$("#x-field").value||null,
         y:aggregation==="count"?null:($("#y-field").value||null),
-        aggregation,
-        chart_type:$("#chart-type").value
+        aggregation
     };
 }
 function updateAggregationUI(){
     $("#y-field").disabled=$("#aggregation").value==="count";
 }
+function updateVisualTypeUI(){
+    const pivot=$("#chart-type").value==="pivot";
+    document.querySelectorAll(".chart-field").forEach(field=>field.classList.toggle("hidden",pivot));
+    $("#pivot-fields").classList.toggle("hidden",!pivot);
+    renderPivotOperations();
+}
+function resetVisualEditor(){
+    state.editingChartId=null;
+    if(state.activeDataset)renderSelectors(state.activeDataset.columns,{});
+    $("#visual-title").value="";
+    $("#chart-type").value="bar";
+    updateVisualTypeUI();
+    $("#editor-heading").textContent="Nueva visualización";
+    $("#editor-help").textContent="Configura un gráfico o una tabla dinámica.";
+    $("#editor-message").textContent="Cada visualización se guarda por separado.";
+    $("#save-generate").textContent="Agregar visualización";
+    $("#cancel-edit").classList.add("hidden");
+    $("#editor-error").classList.add("hidden");
+}
 function clearChart(){
-    if(state.chart){
-        state.chart.destroy();
-        state.chart=null;
-    }
-    $("#chart-empty").classList.remove("hidden");
-    $("#chart-title").textContent="Visualización";
-    $("#chart-meta").textContent="Configura el gráfico para comenzar.";
+    state.chartInstances.forEach(chart=>chart.destroy());
+    state.chartInstances.clear();
+    const grid=$("#chart-grid");
+    if(grid)grid.innerHTML='<div id="chart-empty" class="chart-empty">Agrega una visualización para comenzar.</div>';
 }
 async function selectDataset(id){
     try{
@@ -192,6 +253,7 @@ async function selectDashboard(id){
         status("Cargando dashboard...");
         const dashboard=await api(`/api/dashboards/${id}`);
         const dataset=await api(`/api/datasets/${dashboard.dataset_id}`);
+        dashboard.config=normalizeDashboardConfig(dashboard.config||{});
         state.activeDashboard=dashboard;
         state.activeDataset=dataset;
         renderDatasetInfo(dataset);
@@ -203,15 +265,10 @@ async function selectDashboard(id){
         $("#dashboard-actions").classList.remove("hidden");
         $("#dashboard-name").textContent=dashboard.name;
         $("#page-title").textContent=dashboard.name;
-        renderSelectors(dataset.columns,dashboard.config||{});
+        resetVisualEditor();
         closeSidebar();
+        await renderCharts();
         status("Dashboard cargado");
-
-        if(dashboard.config?.x){
-            renderChart(await requestAnalysis(dashboard.config));
-        }else{
-            clearChart();
-        }
     }catch(e){
         clearChart();
         toast(e.message,true);
@@ -236,20 +293,12 @@ async function createDashboard(){
             return;
         }
 
-        const x=defaultX(state.activeDataset.columns);
-        const y=defaultY(state.activeDataset.columns);
-        const config={
-            x:x?.name||null,
-            y:y?.name||null,
-            aggregation:y?"sum":"count",
-            chart_type:"bar"
-        };
         const d=await api("/api/dashboards",{
             method:"POST",
             body:JSON.stringify({
                 name:name.trim(),
                 dataset_id:state.activeDataset.id,
-                config
+                config:{charts:[]}
             })
         });
         await refreshLists();
@@ -260,15 +309,10 @@ async function createDashboard(){
     }
 }
 async function requestAnalysis(config){
+    const payload={dataset_id:state.activeDataset.id,...config};
     return api("/api/analysis",{
         method:"POST",
-        body:JSON.stringify({
-            dataset_id:state.activeDataset.id,
-            x:config.x,
-            y:config.y,
-            aggregation:config.aggregation,
-            chart_type:config.chart_type
-        })
+        body:JSON.stringify(payload)
     });
 }
 async function saveAndGenerate(){
@@ -276,72 +320,205 @@ async function saveAndGenerate(){
         toast("Selecciona o crea un dashboard.",true);
         return;
     }
+
     const config=currentConfig();
-    if(!config.x){
-        toast("Selecciona una columna para agrupar.",true);
+    if(!config.title){
+        showEditorError("Escribe un nombre para la visualización.");
         return;
     }
-    if(["sum","average"].includes(config.aggregation)&&!config.y){
-        toast("Selecciona una columna numérica.",true);
-        return;
+    if(config.chart_type==="pivot"){
+        if(!config.rows.length){
+            showEditorError("Selecciona al menos una fila para la tabla dinámica.");
+            return;
+        }
+        if(!config.values.length){
+            showEditorError("Selecciona al menos un valor para la tabla dinámica.");
+            return;
+        }
+    }else{
+        if(!config.x){
+            showEditorError("Selecciona una columna para agrupar.");
+            return;
+        }
+        if(["sum","average"].includes(config.aggregation)&&!config.y){
+            showEditorError("Selecciona una columna numérica.");
+            return;
+        }
     }
+
+    const charts=[...(state.activeDashboard.config?.charts||[])];
+    const visual={...config,id:state.editingChartId||makeVisualId()};
+    const index=charts.findIndex(item=>item.id===visual.id);
+    if(index>=0)charts[index]=visual;
+    else charts.push(visual);
+
     try{
-        status("Guardando configuración...");
-        state.activeDashboard=await api(
-            `/api/dashboards/${state.activeDashboard.id}`,
-            {
-                method:"PUT",
-                body:JSON.stringify({
-                    name:state.activeDashboard.name,
-                    config
-                })
-            }
-        );
+        status("Guardando visualización...");
+        state.activeDashboard=await api(`/api/dashboards/${state.activeDashboard.id}`,{
+            method:"PUT",
+            body:JSON.stringify({
+                name:state.activeDashboard.name,
+                config:{...state.activeDashboard.config,charts}
+            })
+        });
+        state.activeDashboard.config=normalizeDashboardConfig(state.activeDashboard.config||{});
         renderDashboardList();
         renderDatasetList();
-        renderChart(await requestAnalysis(config));
+        await renderCharts();
+        resetVisualEditor();
         status("Guardado");
-        toast("Configuración guardada.");
+        toast(index>=0?"Visualización actualizada.":"Visualización agregada y guardada.");
     }catch(e){
         status("Error");
+        showEditorError(e.message);
         toast(e.message,true);
     }
 }
-function renderChart(data){
-    if(state.chart){
-        state.chart.destroy();
-        state.chart=null;
+function showEditorError(message){
+    const error=$("#editor-error");
+    error.textContent=message;
+    error.classList.remove("hidden");
+}
+function makeVisualId(){
+    return window.crypto?.randomUUID?window.crypto.randomUUID():`visual-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+function normalizeDashboardConfig(config){
+    if(Array.isArray(config.charts))return config;
+    if(config.x||config.chart_type){
+        return {...config,charts:[{
+            id:"legacy-chart",
+            title:"Visualización 1",
+            chart_type:config.chart_type||"bar",
+            x:config.x,
+            y:config.y,
+            aggregation:config.aggregation||"sum"
+        }]};
     }
-    $("#chart-empty").classList.add("hidden");
-    const labels={sum:"Suma",average:"Promedio",count:"Conteo"}[data.aggregation]||data.aggregation;
-    $("#chart-title").textContent=`${labels} por ${data.x_label}`;
-    $("#chart-meta").textContent=data.y_label;
-
-    const pieColors=["#4777dd","#16a085","#e67e22","#8854d0","#e04f70","#36a2eb","#7cb342","#d7ac25"];
-    state.chart=new Chart($("#main-chart"),{
-        type:data.chart_type,
-        data:{
-            labels:data.labels,
-            datasets:[{
-                label:data.y_label,
+    return {...config,charts:[]};
+}
+function visualDescription(config){
+    if(config.chart_type==="pivot"){
+        return `Tabla dinámica · Filas: ${config.rows.join(", ")} · Columnas: ${config.columns.join(", ")||"Sin columnas"}`;
+    }
+    const aggregation={sum:"Suma",average:"Promedio",count:"Conteo"}[config.aggregation]||config.aggregation;
+    return `${aggregation} por ${config.x}${config.y?` · ${config.y}`:""} · ${config.chart_type}`;
+}
+function visualCardHtml(config){
+    const id=esc(config.id);
+    const pivot=config.chart_type==="pivot";
+    const content=pivot
+        ? `<div id="pivot-result-${id}" class="pivot-result table-scroll">Procesando tabla...</div>`
+        : `<div class="chart-area"><canvas id="visual-chart-${id}"></canvas></div>`;
+    return `<div class="panel visual-card ${pivot?"visual-card-wide":""}" data-visual-id="${id}">
+        <div class="panel-head visual-card-head">
+            <div><h3>${esc(config.title||"Visualización")}</h3><span>${esc(visualDescription(config))}</span></div>
+            <div class="visual-actions">
+                <button class="button secondary" data-edit-visual="${id}">Editar</button>
+                <button class="button danger" data-delete-visual="${id}">Eliminar</button>
+            </div>
+        </div>${content}</div>`;
+}
+function tableHtml(columns,rows){
+    if(!rows||!rows.length)return '<div class="chart-empty">No hay resultados para mostrar.</div>';
+    return `<table><thead><tr>${columns.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(c=>`<td>${esc(formatCell(row[c]))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+async function renderVisualization(config){
+    try{
+        const data=await requestAnalysis(config);
+        if(config.chart_type==="pivot"){
+            const box=document.getElementById(`pivot-result-${config.id}`);
+            if(box)box.innerHTML=tableHtml(data.columns,data.rows);
+            return;
+        }
+        const canvas=document.getElementById(`visual-chart-${config.id}`);
+        if(!canvas)return;
+        const labels={sum:"Suma",average:"Promedio",count:"Conteo"}[data.aggregation]||data.aggregation;
+        const pieColors=["#4777dd","#16a085","#e67e22","#8854d0","#e04f70","#36a2eb","#7cb342","#d7ac25"];
+        const chart=new Chart(canvas,{
+            type:data.chart_type,
+            data:{labels:data.labels,datasets:[{
+                label:`${labels} de ${data.y_label}`,
                 data:data.values,
                 backgroundColor:data.chart_type==="pie"?pieColors:"#4777dd",
                 borderColor:"#345fb8",
                 borderWidth:2,
                 tension:.25,
                 fill:false
-            }]
-        },
-        options:{
-            responsive:true,
-            maintainAspectRatio:false,
-            plugins:{legend:{display:data.chart_type==="pie"}},
-            scales:data.chart_type==="pie"?{}:{
-                x:{grid:{display:false}},
-                y:{beginAtZero:true}
+            }]},
+            options:{
+                responsive:true,
+                maintainAspectRatio:false,
+                plugins:{legend:{display:data.chart_type==="pie"}},
+                scales:data.chart_type==="pie"?{}:{x:{grid:{display:false}},y:{beginAtZero:true}}
             }
-        }
-    });
+        });
+        state.chartInstances.set(config.id,chart);
+    }catch(e){
+        const box=config.chart_type==="pivot"
+            ? document.getElementById(`pivot-result-${config.id}`)
+            : document.querySelector(`[data-visual-id="${CSS.escape(config.id)}"]`);
+        if(box)box.innerHTML=`<div class="chart-error">${esc(e.message)}</div>`;
+    }
+}
+async function renderCharts(){
+    state.chartInstances.forEach(chart=>chart.destroy());
+    state.chartInstances.clear();
+    const grid=$("#chart-grid");
+    const charts=state.activeDashboard?.config?.charts||[];
+    if(!charts.length){
+        grid.innerHTML='<div id="chart-empty" class="chart-empty">Este dashboard todavía no tiene visualizaciones. Utiliza el formulario para agregar una.</div>';
+        return;
+    }
+    grid.innerHTML=charts.map(visualCardHtml).join("");
+    await Promise.all(charts.map(renderVisualization));
+}
+function setMultiSelected(selector,values){
+    const select=$(selector);
+    [...select.options].forEach(option=>option.selected=(values||[]).includes(option.value));
+}
+function editVisualization(id){
+    const visual=state.activeDashboard?.config?.charts?.find(item=>item.id===id);
+    if(!visual)return;
+    state.editingChartId=id;
+    $("#visual-title").value=visual.title||"";
+    $("#chart-type").value=visual.chart_type||"bar";
+    if(visual.chart_type==="pivot"){
+        setMultiSelected("#pivot-rows",visual.rows||[]);
+        setMultiSelected("#pivot-columns",visual.columns||[]);
+        setMultiSelected("#pivot-values",(visual.values||[]).map(v=>typeof v==="string"?v:v.field));
+        renderPivotOperations(visual.values||[]);
+    }else{
+        $("#x-field").value=visual.x||"";
+        $("#y-field").value=visual.y||"";
+        $("#aggregation").value=visual.aggregation||"sum";
+        updateAggregationUI();
+    }
+    updateVisualTypeUI();
+    if(visual.chart_type==="pivot")renderPivotOperations(visual.values||[]);
+    $("#editor-heading").textContent="Editar visualización";
+    $("#editor-help").textContent="Los cambios solo afectarán a esta visualización.";
+    $("#editor-message").textContent="Estás editando una visualización existente.";
+    $("#save-generate").textContent="Guardar cambios";
+    $("#cancel-edit").classList.remove("hidden");
+    $("#editor-error").classList.add("hidden");
+    $("#visual-title").scrollIntoView({behavior:"smooth",block:"center"});
+}
+async function deleteVisualization(id){
+    const charts=state.activeDashboard?.config?.charts||[];
+    const visual=charts.find(item=>item.id===id);
+    if(!visual||!confirm(`¿Eliminar "${visual.title}"?`))return;
+    try{
+        const updated=charts.filter(item=>item.id!==id);
+        state.activeDashboard=await api(`/api/dashboards/${state.activeDashboard.id}`,{
+            method:"PUT",
+            body:JSON.stringify({name:state.activeDashboard.name,config:{...state.activeDashboard.config,charts:updated}})
+        });
+        state.activeDashboard.config=normalizeDashboardConfig(state.activeDashboard.config||{});
+        if(state.editingChartId===id)resetVisualEditor();
+        await renderCharts();
+        toast("Visualización eliminada.");
+        status("Guardado");
+    }catch(e){toast(e.message,true);status("Error")}
 }
 async function uploadFile(file){
     const form=new FormData();
@@ -446,7 +623,10 @@ $("#delete-dataset").addEventListener("click",deleteDataset);
 $("#rename-dashboard").addEventListener("click",renameDashboard);
 $("#delete-dashboard").addEventListener("click",deleteDashboard);
 $("#save-generate").addEventListener("click",saveAndGenerate);
+$("#cancel-edit").addEventListener("click",resetVisualEditor);
 $("#aggregation").addEventListener("change",updateAggregationUI);
+$("#chart-type").addEventListener("change",updateVisualTypeUI);
+$("#pivot-values").addEventListener("change",()=>renderPivotOperations());
 $("#menu-toggle").addEventListener("click",()=>$("#sidebar").classList.toggle("open"));
 
 document.addEventListener("click",async e=>{
@@ -463,7 +643,12 @@ document.addEventListener("click",async e=>{
     const dataset=e.target.closest("[data-dataset-id]");
     if(dataset){
         await selectDataset(Number(dataset.dataset.datasetId));
+        return;
     }
+    const edit=e.target.closest("[data-edit-visual]");
+    if(edit){editVisualization(edit.dataset.editVisual);return;}
+    const remove=e.target.closest("[data-delete-visual]");
+    if(remove){await deleteVisualization(remove.dataset.deleteVisual);}
 });
 window.addEventListener("resize",()=>{
     if(window.innerWidth>800)closeSidebar();
